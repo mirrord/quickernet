@@ -11,4 +11,4 @@ future goals:
 # Install
 1. Install (Visual C++ Build Tools)[https://visualstudio.microsoft.com/downloads/] (version 14.2): [direct link](https://aka.ms/vs/17/release/vs_BuildTools.exe) (will expire eventually) 
 2. Install the [CUDA toolkit](https://developer.nvidia.com/cuda-downloads)
-3. Download this repo and run `pip install .` 
+3. Download this repo and run `pip install .`

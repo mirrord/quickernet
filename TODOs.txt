@@ -1,0 +1,3 @@
+
+ - experiment with node functions, record results
+ - implement node, optimized_node functions
