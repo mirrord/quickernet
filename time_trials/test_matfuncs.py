@@ -8,8 +8,8 @@ from time_trials.cython_funcs.mult import matmul_npc, matmul_cpc
 # this is really just an example file for me to experiment with
 
 NUM_ROUNDS = 1000
-MATRIX_SIZE_MIN = 1000
-MATRIX_SIZE_MAX = 1000
+MATRIX_SIZE_MIN = 10000
+MATRIX_SIZE_MAX = 10000
 
 
 def benchmark_setup(function):
