@@ -3,6 +3,10 @@ import inspect
 from functools import wraps
 
 
+class CLIError(Exception):
+    pass
+
+
 def command(subs, parent_parser):
     def decorator(function):
         cmd = function.__name__.replace('_', '-')
@@ -11,8 +15,6 @@ def command(subs, parent_parser):
             cmd, help=function.__doc__, parents=[parent_parser], add_help=False)
         for varname, vartype in function.__annotations__.items():
             defaults = {} if function.__kwdefaults__ is None else function.__kwdefaults__.items()
-            # TODO: add support for bool
-            # TODO: add configurable helpstrings for arguments (somehow)
             if varname in defaults:
                 subparser.add_argument(
                     f'--{varname}', type=vartype, default=function.__kwdefaults__['varname'], help=vartype.__name__)
