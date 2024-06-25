@@ -24,11 +24,13 @@ def run():
     ]
 
     a = node.PipelineNode(pipeline)
-    print(a.forward(np.array([[1, 2]])))
+    print(a)
+    output = a.forward(np.array([[1, 2]]))
+    print(output)
+    print(a.backward(output))
 
 
 @command(cmd_subparser, global_parser)
 def poop(a: int):
     '''poop lol'''
     return print(a + 10)
-

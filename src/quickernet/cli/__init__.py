@@ -9,5 +9,3 @@ def CLI(cli_args):
         args.func(args)
     else:
         cli.global_parser.print_help()
-    
-

@@ -4,3 +4,4 @@ build
 *.c
 *.pyd
 *.pyc
+.vscode/launch.json

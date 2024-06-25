@@ -12,10 +12,13 @@ class PipelineNode:
         self._pipeline = pipeline
         self._history = []
 
+    def __str__(self):
+        return f"<{self.__class__.__name__}: {[str(p) for p in self._pipeline]}>"
+
     def forward(self, inputs):
         self._history = [inputs]
         for func in self._pipeline:
-            staged_output = func(inputs)
+            staged_output = func(self._history[-1])
             self._history.append(staged_output)
         return self._history.pop()
 

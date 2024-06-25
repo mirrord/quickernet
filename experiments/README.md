@@ -12,7 +12,7 @@ Of course, I need to know if these metrics change when we compile the code with 
 
 I wonder how this number changes with other data types (int/int8, binary, ternary) and operations. For now however, I will leave those as later avenues of exploration.
 #### Conclusions & Notes:
- - It seems like the cythonized versions of each operation *tend* to be faster, but this isn't always the case. In general, however, the larger the matrix the more likely it is to favor the cythonized version.
+ - It seems like the cythonized versions of each operation *tend* to be faster, but this isn't always the case. In general, however, the larger the matrix the more likely it is to favor the cythonized version. UPDATE: at 10kx10k cells, the cythonized versions no longer win out.
  - Matrices under about 150x150 cells should be multiplied using the CPU due to the overhead of communicating with the GPU.
 
 #### TODO:
