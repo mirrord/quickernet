@@ -1,9 +1,10 @@
 
 import argparse
-
 import cupy as np
+
 from .command import command
-from src.quickernet.nodes import node, linear, activations
+from src.quickernet.nodes import node, linear, activations, synapses
+from src.quickernet.networks import graph
 
 # TODO: add support for making parameters necessary or optional
 # TODO: add support for bool
@@ -19,16 +20,25 @@ cmd_subparser = global_parser.add_subparsers(
 def run():
     '''just a test function'''
     pipeline = [
+        synapses.SynapseSum(),
         linear.Linear(2, 3),
         activations.Sigmoid()
     ]
 
+    pipeline2 = [
+        synapses.SynapseSum(),
+        linear.Linear(3, 3),
+        activations.Sigmoid()
+    ]
+
     a = node.PipelineNode(pipeline)
-    print(a)
-    output = a.forward(np.array([[1, 2]]))
-    print(output)
-    print(a.backward(output))
-    print(a.optimize())
+    b = node.PipelineNode(pipeline2)
+    g = graph.DirectedGraphModel()
+    g.add_node(a)
+    g.add_node(b)
+    g.add_edge(0, 1)
+    print(g.forward(np.array([[1, 2]])))
+    print(g.backward({k: v * 0.5 for k, v in g.last_outputs.items()}))
 
 
 @command(cmd_subparser, global_parser)

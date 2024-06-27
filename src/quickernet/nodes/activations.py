@@ -1,18 +1,14 @@
 
 import cupy as np
-from .utils import OptimizableFunction
+from .utils import NodeFunction
 
 
-class NoActivation(OptimizableFunction):
-    def __call__(self, inputs):
-        return inputs
-
-    def backwards(self, inputs):
-        return 1
+class NoActivation(NodeFunction):
+    pass
 
 
-class Sigmoid(OptimizableFunction):
-    def __call__(self, inputs):
+class Sigmoid(NodeFunction):
+    def forward(self, inputs):
         return 1 / (1 + np.exp(-inputs))
 
     def backwards(self, error_gradient, inputs):

@@ -20,14 +20,29 @@ def params_only(return_statement: str) -> list:
     return objs
 
 
+def list_except(lst, idx):
+    return lst[:idx] + lst[idx + 1:]
+
+
 class OptimizableFunction:
     def __call__(self, inputs: Any):
-        return None
+        return self.forward(inputs)
+
+    def forward(self, inputs: Any):
+        return inputs
+
+    def backward(self, error_gradient, inputs: Any) -> Tuple[Any, Any]:
+        return None, error_gradient
 
     # this is a good enough general case, but sometimes there are better ways
     # returns a tuple of (inputs, source, return statements)
-    def optimize(self) -> Tuple[list, str, list]:
-        source_lines = getsourcelines(self.__call__)[0]
+    def optimize(self, backwards=False) -> Tuple[list, str, list]:
+        f = self.backward if backwards else self.forward
+        source_lines = getsourcelines(f)[0]
         return list(signature(self.__call__).parameters.keys()), \
             ''.join(source_lines[1:-1]), \
             params_only(source_lines[-1])
+
+
+class NodeFunction(OptimizableFunction):
+    input_shape = None

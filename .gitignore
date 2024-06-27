@@ -5,3 +5,4 @@ build
 *.pyd
 *.pyc
 .vscode/launch.json
+.editorconfig

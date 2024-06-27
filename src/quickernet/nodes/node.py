@@ -1,26 +1,41 @@
 # import numpy as np
 # import cupy as np
 from typing import List, Tuple
+from .utils import OptimizableFunction, NodeFunction
 
 
 class NodeFeedException(Exception):
     pass
 
 
-class PipelineNode:
-    def __init__(self, pipeline: List):
+class PipelineNode(NodeFunction):
+    def __init__(self, pipeline: List[OptimizableFunction]):
         self._pipeline = pipeline
         self._history = []
+        self.last_output = None
+        self.input_shape = None
+        for obj in pipeline:
+            if obj.input_shape:
+                self.input_shape = obj.input_shape
+                break
+        if self.input_shape is None:
+            raise NodeFeedException("No input shape found in pipeline")
 
     def __str__(self):
         return f"<{self.__class__.__name__}: {[str(p) for p in self._pipeline]}>"
 
+    def clear(self):
+        self._history = []
+        self.last_output = None
+
     def forward(self, inputs):
+        inputs = inputs if isinstance(inputs, list) else [inputs]
         self._history = [inputs]
         for func in self._pipeline:
             staged_output = func(self._history[-1])
             self._history.append(staged_output)
-        return self._history.pop()
+        self.last_output = self._history.pop()
+        return self.last_output
 
     def backward(self, error_gradient):
         last_update, staged_error_gradient = self._pipeline[-1].backwards(
