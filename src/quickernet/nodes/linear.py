@@ -10,7 +10,7 @@ class Linear(OptimizableFunction):
 
     def __call__(self, inputs):
         return np.dot(inputs, self.weight) + self.bias
-    
+
     def __str__(self):
         print(self.weight, self.bias)
         return f"<{self.__class__.__name__}: ({self.weight.shape}, {self.bias.shape})>"

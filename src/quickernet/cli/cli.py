@@ -28,6 +28,7 @@ def run():
     output = a.forward(np.array([[1, 2]]))
     print(output)
     print(a.backward(output))
+    print(a.optimize())
 
 
 @command(cmd_subparser, global_parser)

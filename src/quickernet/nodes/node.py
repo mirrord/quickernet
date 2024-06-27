@@ -1,6 +1,6 @@
 # import numpy as np
 # import cupy as np
-from typing import List
+from typing import List, Tuple
 
 
 class NodeFeedException(Exception):
@@ -35,3 +35,14 @@ class PipelineNode:
     def update(self, updates: List):
         for idx, func in enumerate(self._pipeline):
             func.update(updates[idx])
+
+    def optimize(self) -> Tuple[list, str, list]:
+        my_inputs, lines, staged_outputs = self._pipeline[0].optimize()
+        opt_lines = [lines]
+        for func in self._pipeline[1:]:
+            params, lines, next_output = func.optimize()
+            for inarg, outarg in zip(staged_outputs, params):
+                opt_lines.append(f"\t{outarg} = {inarg}")
+            staged_outputs = next_output
+            opt_lines.append(lines)
+        return my_inputs, ''.join(opt_lines), staged_outputs
