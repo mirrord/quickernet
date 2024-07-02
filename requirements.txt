@@ -1,5 +1,7 @@
 cupy==13.2.0
+matplotlib==3.9.0
 networkx==3.3
 numpy==1.26.4
 pytest==8.2.2
+Requests==2.32.3
 setuptools==70.0.0

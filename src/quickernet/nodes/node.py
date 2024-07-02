@@ -47,9 +47,9 @@ class PipelineNode(NodeFunction):
             updates.insert(0, staged_update)
         return updates, staged_error_gradient
 
-    def update(self, updates: List):
+    def update(self, updates: List, learning_rate: float):
         for idx, func in enumerate(self._pipeline):
-            func.update(updates[idx])
+            func.update(updates[idx], learning_rate)
 
     def optimize(self) -> Tuple[list, str, list]:
         my_inputs, lines, staged_outputs = self._pipeline[0].optimize()

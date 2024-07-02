@@ -1,6 +1,7 @@
 
 from typing import Any, Tuple
 from inspect import getsourcelines, signature
+import cupy as np
 
 
 def params_only(return_statement: str) -> list:
@@ -22,6 +23,27 @@ def params_only(return_statement: str) -> list:
 
 def list_except(lst, idx):
     return lst[:idx] + lst[idx + 1:]
+
+
+# NOTE: these functions are tentative and will probably be moved to a more appropriate location later
+def shuffle_in_unison(a, b):
+    assert len(a) == len(b)
+    p = np.random.permutation(len(a))
+    a[:] = a[p]
+    b[:] = b[p]
+
+
+def binarize(y, num_classes):
+    y = y.astype(int)
+    targets = np.zeros((len(y), num_classes), np.float32)
+    for i in range(targets.shape[0]):
+        targets[i][y[i]] = 1
+    return targets
+
+
+def debinarize(y):
+    return y.argmax(axis=1)
+#####
 
 
 class OptimizableFunction:
@@ -46,3 +68,6 @@ class OptimizableFunction:
 
 class NodeFunction(OptimizableFunction):
     input_shape = None
+
+    def update(self, updates, learning_rate):
+        pass

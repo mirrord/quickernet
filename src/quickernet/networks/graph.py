@@ -1,6 +1,7 @@
 import networkx as nx
 
 from ..nodes import node, utils
+from ..datasets import dataset
 
 
 class NetworkException(Exception):
@@ -14,6 +15,7 @@ class DirectedGraphModel(utils.OptimizableFunction):
         self._input_nodes = []
         self._output_nodes = []
         self.last_outputs = {}
+        self._learning_rate = 0.1
 
     def add_node(self, node: node.PipelineNode, is_input=False, is_output=False):
         self._graph.add_node(self._next_label, inner=node)
@@ -40,29 +42,27 @@ class DirectedGraphModel(utils.OptimizableFunction):
             return dict(zip(node_list, inputs))
         return {node_list[0]: inputs}
 
+    def _find_input_nodes(self):
+        return [n for n in self._graph.nodes if not list(self._graph.predecessors(n))]
+
     def forward(self, inputs):
         graph_walker = nx.topological_sort(self._graph)
         self._output_nodes = self._output_nodes or [
             next(reversed(list(nx.topological_sort(self._graph))))]
-        self._input_nodes = self._input_nodes or [next(graph_walker)]
+        self._input_nodes = self._input_nodes or self._find_input_nodes()
         if not self._input_nodes:
             raise NetworkException("No input nodes found in graph.")
         inputs = self._standardize_input(inputs)
-        for input_idx in self._input_nodes:
-            try:
-                self._graph.nodes[input_idx]['inner'].forward(
-                    inputs[input_idx])
-            except ValueError:
-                raise NetworkException(f"Axis mismatch on network input (input node {input_idx}) which expects {
-                                       self._graph.nodes[input_idx]['inner'].input_shape} but got {inputs[input_idx].shape} instead.")
         for n in graph_walker:
             staged_input = [
-                self._graph.nodes[p]['inner'].last_output for p in self._graph.predecessors(n)]
+                self._graph.nodes[p]['inner'].last_output for p in self._graph.predecessors(n)] or inputs.get(n, [])
             try:
                 self._graph.nodes[n]['inner'].forward(staged_input)
             except ValueError:
                 raise NetworkException(f"Axis mismatch on forward node {n} (input frome nodes: {list(self._graph.predecessors(n))}) which expects {
                                        self._graph.nodes[n]['inner'].input_shape} but got {[n.shape for n in staged_input]} instead.")
+            except AttributeError:
+                raise NetworkException(f"Node {n} has no input.")
         self._output_nodes = self._output_nodes or []
         self.last_outputs = {
             n: self._graph.nodes[n]['inner'].last_output for n in self._output_nodes}
@@ -91,7 +91,8 @@ class DirectedGraphModel(utils.OptimizableFunction):
 
     def update(self, updates):
         for idx, update in updates.items():
-            self._graph.nodes[idx]['inner'].update(update)
+            self._graph.nodes[idx]['inner'].update(
+                update, learning_rate=self._learning_rate)
 
     def optimize(self):
         pass  # TODO: implement this
@@ -103,10 +104,20 @@ class DirectedGraphModel(utils.OptimizableFunction):
         cost_history = {k: [] for k in self._output_nodes}
         for _ in range(epochs):
             outputs = self.forward(inputs)
-            cost_history = {k: cost_history[k] + cost_func(
-                v, targets[k]) for k, v in outputs.items()}
+            cost_history = {k: cost_history[k] + [cost_func(
+                v, targets[k])] for k, v in outputs.items()}
             error_gradients = {k: cost_func.backward(
                 v, targets[k]) for k, v in outputs.items()}
             updates, _ = self.backward(error_gradients)
             self.update(updates)
         return cost_history
+
+    def train_on(self, dataset: dataset.Dataset, cost_func: utils.OptimizableFunction, epochs):
+        return self.train(dataset._inputs, dataset._labels, cost_func, epochs)
+
+    def test(self, inputs, targets, cost_func: utils.OptimizableFunction):
+        outputs = self.forward(inputs)
+        return {k: cost_func(v, targets[k]) for k, v in outputs.items()}
+
+    def test_on(self, dataset: dataset.Dataset, cost_func: utils.OptimizableFunction):
+        return self.test(dataset._inputs, dataset._labels, cost_func)

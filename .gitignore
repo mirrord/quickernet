@@ -6,3 +6,4 @@ build
 *.pyc
 .vscode/launch.json
 .editorconfig
+datasets/*

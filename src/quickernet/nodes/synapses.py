@@ -1,9 +1,9 @@
 
 from typing import List
-from .utils import OptimizableFunction
+from .utils import NodeFunction
 
 
-class SynapseFunction(OptimizableFunction):
+class SynapseFunction(NodeFunction):
     input_shape = None
 
     def forward(self, inputs_l: List):
