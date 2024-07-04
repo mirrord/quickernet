@@ -5,8 +5,13 @@ from .utils import NodeFunction, list_except
 class Linear(NodeFunction):
     # TODO: implement other initialization methods (Xavier, He, etc.)
     def __init__(self, input_dim, output_dim):
-        self.weight = np.random.randn(input_dim, output_dim)
+        # self.weight = np.random.randn(input_dim, output_dim)
         self.bias = np.random.randn(1, output_dim)
+        # Xavier initialization
+        self.weight = np.random.randn(input_dim, output_dim) * np.sqrt(
+            1 / (input_dim + output_dim)
+        )
+        # NOTE: are these even needed?
         self.input_shape = ('BATCH_N', input_dim)
         self.output_shape = ('BATCH_N', output_dim)
 

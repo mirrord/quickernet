@@ -24,7 +24,7 @@ def run():
     p1 = node.PipelineNode([
         synapses.SynapseSum(),
         linear.Linear(28 * 28, 100),
-        activations.Sigmoid()
+        activations.ReLU()
     ])
 
     p2 = node.PipelineNode([
@@ -36,7 +36,7 @@ def run():
     p3 = node.PipelineNode([
         synapses.SynapseSum(),
         linear.Linear(100, 10),
-        activations.Sigmoid()
+        activations.Softmax()
     ])
 
     g = graph.DirectedGraphModel()
@@ -45,7 +45,7 @@ def run():
     g.add_node(p3)
     g.add_edge(0, 1)
     g.add_edge(1, 2)
-    g.add_edge(0, 2)
+    # g.add_edge(0, 2)
 
     dm = dataset.DatasetManager()
     training_data, test_data = dm.fetch_separate(
@@ -64,7 +64,7 @@ def run():
     # cost_history = g.train_on(training_data, cost_func, 100)
     acc_b4 = g.get_accuracy(test_data)["all"]
     train_acc_b4 = g.get_accuracy(training_data)["all"]
-    cost_history = g.train_alternate(training_data, cost_func, 5, 15)
+    cost_history = g.train_alternate(training_data, cost_func, 10, 150)
     cost_after = g.test_on(test_data, cost_func)
     test_acc_after = g.get_accuracy(test_data)["all"]
     train_acc_after = g.get_accuracy(training_data)["all"]
