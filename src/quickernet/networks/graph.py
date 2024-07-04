@@ -93,15 +93,15 @@ class DirectedGraphModel(utils.OptimizableFunction):
                     gradients.extend(g)
                 else:
                     gradients.append(g)
-            avg_grad = sum(gradients) / len(gradients)
+            total_grad = sum(gradients)
             try:
                 update, gradient = self._graph.nodes[node_idx]['inner'].backward(
-                    avg_grad)
+                    total_grad)
                 updates[node_idx] = update
                 error_gradients[node_idx] = gradient
             except ValueError:
                 raise NetworkException(f"Axis mismatch on backward node {node_idx} (gradients frome nodes: {list(self._graph.successors(node_idx))}) which expects {
-                                       self._graph.nodes[node_idx]['inner'].input_shape} but got {avg_grad.shape} instead.")
+                                       self._graph.nodes[node_idx]['inner'].input_shape} but got {total_grad.shape} instead.")
         return updates, {idx: error_gradients[idx] for idx in self._input_nodes}
 
     def update(self, updates):
