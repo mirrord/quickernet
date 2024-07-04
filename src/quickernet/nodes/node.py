@@ -29,7 +29,6 @@ class PipelineNode(NodeFunction):
         self.last_output = None
 
     def forward(self, inputs):
-        inputs = inputs if isinstance(inputs, list) else [inputs]
         self._history = [inputs]
         for func in self._pipeline:
             staged_output = func(self._history[-1])
@@ -38,12 +37,11 @@ class PipelineNode(NodeFunction):
         return self.last_output
 
     def backward(self, error_gradient):
-        last_update, staged_error_gradient = self._pipeline[-1].backwards(
-            error_gradient, self._history[-1])
-        updates = [last_update]
-        for idx, func in enumerate(reversed(self._pipeline[:-1])):
-            staged_update, staged_error_gradient = func.backwards(
-                staged_error_gradient, self._history[-idx - 2])
+        staged_error_gradient = error_gradient
+        updates = []
+        for idx, func in enumerate(reversed(self._pipeline)):
+            staged_update, staged_error_gradient = func.backward(
+                staged_error_gradient, self._history[-idx - 1])
             updates.insert(0, staged_update)
         return updates, staged_error_gradient
 

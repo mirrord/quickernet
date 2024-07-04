@@ -16,7 +16,7 @@ class CostFunction(OptimizableFunction):
 
 class QuadraticCost(CostFunction):
     def forward(self, inputs, expected_output):
-        return (np.sum((inputs - expected_output) ** 2) / inputs.shape[0]).item()
+        return (np.sum(np.square(inputs - expected_output))).item() / inputs.shape[0]
 
     def backward(self, inputs, expected_output):
-        return (inputs - expected_output) * 2 / inputs.shape[0]
+        return (inputs - expected_output) * 2

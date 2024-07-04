@@ -39,11 +39,17 @@ class DatasetManager:
             y_test = y_test.reshape(y_test_shape)
         return Dataset(x, y), Dataset(x_test, y_test)
 
+# TODO: generalize for multiple input channels
+
 
 class Dataset:
     def __init__(self, inputs, labels):
         self._inputs = inputs
         self._labels = labels
+        self._binarized = sum(self._labels[..., -1]) == 1
+        # TODO: generalize this for multiple input & output channels
+        self._binshape = labels.shape if self._binarized else (
+            len(self._inputs), self.num_classes())
 
     def __len__(self):
         return len(self._inputs)
@@ -54,8 +60,25 @@ class Dataset:
         self._labels = self._labels[p]
 
     def binarize(self, num_classes):
+        if self._binarized:
+            return
         # TODO: test this against my utils function!
-        self._labels = np.eye(num_classes)[self._labels]
+        self._labels = np.eye(num_classes)[
+            self._labels].reshape(self._binshape)
+        self._binarized = True
+
+    def debinarize(self):
+        if not self._binarized:
+            return
+        self._binshape = self._labels.shape
+        self._labels = self._labels.argmax(axis=-1).flatten()
+        self._binarized = False
+
+    def num_classes(self):
+        output_length = self._labels.shape[-1]
+        if output_length == 1 or output_length == len(self._labels):
+            return (max(self._labels.flatten()) + 1).item()
+        return output_length
 
     def split(self, ratio: float):
         split_idx = int(len(self) * ratio)
@@ -69,3 +92,14 @@ class Dataset:
     def batch(self, batch_size: int):
         for i in range(0, len(self), batch_size):
             yield Dataset(self._inputs[i:i + batch_size], self._labels[i:i + batch_size])
+
+    def random_item(self):
+        idx = np.random.randint(len(self))
+        return self._inputs[idx], self._labels[idx]
+
+    def random_subset(self, num_items: int):
+        idxs = np.random.randint(len(self), size=num_items)
+        return Dataset(self._inputs[idxs], self._labels[idxs])
+
+    def __iter__(self):
+        return iter(zip(self._inputs, self._labels))

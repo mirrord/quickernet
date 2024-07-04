@@ -9,3 +9,7 @@ Note: numpy==1.26.4
 
 #### Cython Compile
 `cythonize -i [filename.py]`
+
+#### Unit Tests
+run: `pytest --benchmark-skip`
+debug: `py.test --pdb`

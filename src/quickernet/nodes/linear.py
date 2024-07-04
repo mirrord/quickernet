@@ -16,16 +16,15 @@ class Linear(NodeFunction):
     def __str__(self):
         return f"<{self.__class__.__name__}: ({self.weight.shape}, {self.bias.shape})>"
 
-    def backwards(self, error_gradient, inputs):
+    def backward(self, error_gradient, inputs):
         bias_gradient = error_gradient
         weight_gradient = np.dot(inputs.T, bias_gradient)
         return (bias_gradient, weight_gradient), np.dot(bias_gradient, self.weight.T)
 
     def update(self, updates, learning_rate):
-        self.bias -= np.sum(updates[0], 0, keepdims=True) / \
-            updates[0].shape[0] * learning_rate
-        self.weight -= np.sum(updates[1], 0, keepdims=True) / \
-            updates[0].shape[0] * learning_rate
+        learning_factor = learning_rate / updates[0].shape[0]
+        self.bias -= (np.sum(updates[0], 0) * learning_factor)
+        self.weight -= (updates[1] * learning_factor)
 
 
 # NOTE: this function requires multiple inputs, i.e. inputs must be a list.
@@ -35,7 +34,7 @@ class SelfLinear(NodeFunction):
     def forward(self, inputs):
         return np.matmul(*inputs)
 
-    def backwards(self, error_gradient, inputs):
+    def backward(self, error_gradient, inputs):
         return None, [np.matmul(*list_except(inputs, idx)) * error_gradient for idx, _ in enumerate(inputs)]
 
     def update(self, updates, learning_rate):

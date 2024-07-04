@@ -14,6 +14,9 @@ class SynapseFunction(NodeFunction):
 
 
 class SynapseSum(SynapseFunction):
+    def standardize_input(self, inputs):
+        return inputs if isinstance(inputs, list) else [inputs]
+
     def forward(self, inputs_l: List):
         return sum(inputs_l)
 

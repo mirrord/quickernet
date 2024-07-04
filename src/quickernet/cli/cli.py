@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 # import cupy as np
 
 from .command import command
-from src.quickernet.nodes import node, linear, activations, synapses, costs
+from src.quickernet.nodes import node, linear, activations, synapses, costs, utils
 from src.quickernet.networks import graph
 from src.quickernet.datasets import dataset
 
@@ -53,10 +53,30 @@ def run():
     test_data.binarize(10)
 
     cost_func = costs.QuadraticCost()
-    print(g.test_on(test_data, cost_func))
-    cost_history = g.train_on(training_data, cost_func, 10)
-    print(g.test_on(test_data, cost_func))
+    cost_before = g.test_on(test_data, cost_func)
+    # cost_history = g.train_on(training_data, cost_func, 100)
+    acc_b4 = g.get_accuracy(test_data)
+    cost_history = g.train_alternate(training_data, cost_func, 10, 100)
+    cost_after = g.test_on(test_data, cost_func)
+    print(cost_history)
+    plt.figure(figsize=(10, 5))
+    plt.subplot(121)
     plt.plot(cost_history[1])
+    sample_input, sample_output = test_data.random_item()
+    network_output = g.forward(sample_input)
+    print("***********")
+    print("output: ")
+    print(network_output)
+    print("expected: ")
+    print(sample_output)
+    print("***********")
+    print(f"sample model output: {utils.debinarize(
+        network_output)}, expected output: {utils.debinarize(sample_output.reshape(1, 10))}")
+    print(f"cost before: {cost_before}, cost after: {cost_after}")
+    print(f"accuracies before: {acc_b4}")
+    print(f"accuracies now: {g.get_accuracy(test_data)}")
+    plt.subplot(122)
+    plt.imshow(sample_input.get().reshape(28, 28), cmap='gray')
     plt.show()
 
 
