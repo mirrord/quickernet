@@ -22,3 +22,4 @@ I wonder how this number changes with other data types (int/int8, binary, ternar
 #### Open Questions:
 1. When executing a NN forward pass, is it more efficient to stick with just the GPU or to mix GPU operations with CPU operations?
 2. How does the runtime of dtype fp16 compare to fp32?
+

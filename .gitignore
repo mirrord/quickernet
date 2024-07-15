@@ -7,3 +7,4 @@ build
 .vscode/launch.json
 .editorconfig
 datasets/*
+.vscode/settings.json

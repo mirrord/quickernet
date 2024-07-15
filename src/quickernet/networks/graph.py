@@ -1,3 +1,4 @@
+from typing import Tuple
 import networkx as nx
 from tqdm import trange, tqdm
 from ..nodes import node, utils
@@ -11,19 +12,26 @@ class NetworkException(Exception):
 class DirectedGraphModel(utils.OptimizableFunction):
     def __init__(self):
         self._graph = nx.DiGraph()
-        self._next_label = 0
         self._input_nodes = []
         self._output_nodes = []
         self.last_outputs = {}
         self._learning_rate = 0.01
 
     def add_node(self, node: node.PipelineNode, is_input=False, is_output=False):
-        self._graph.add_node(self._next_label, inner=node)
-        self._next_label += 1
+        node_idx = len(self._graph)
+        self._graph.add_node(node_idx, inner=node)
+        if is_input:
+            self._input_nodes.append(node_idx)
+        if is_output:
+            self._output_nodes.append(node_idx)
 
     # TODO: check for cycles
     def add_edge(self, source: int, target: int):
         self._graph.add_edge(source, target)
+
+    def assign_io_nodes(self, input_nodes: list, output_nodes: list):
+        self._input_nodes = input_nodes
+        self._output_nodes = output_nodes
 
     def remove_node(self, node: int):
         self._graph.remove_node(node)
@@ -109,8 +117,71 @@ class DirectedGraphModel(utils.OptimizableFunction):
             self._graph.nodes[idx]['inner'].update(
                 update, learning_rate=self._learning_rate)
 
-    def optimize(self):
-        pass  # TODO: implement this
+    # TODO: track input & output sites
+    # TODO: handle multiple inputs to nodes
+    def optimize(self, rep_idx: int = 0, prefix="__model", freeze_inits=False, freeze_params=False) -> Tuple[list, str, list]:
+        self._output_nodes = self._output_nodes or self._find_output_nodes()
+        self._input_nodes = self._input_nodes or self._find_input_nodes()
+        my_prefix = f"{prefix}{rep_idx}_node"
+        first_input_name = f"self.{prefix}{rep_idx}_first_in"
+
+        my_desc = {
+            "__init__": {
+                "args": [],
+                "body": [],
+                "return": [],
+            },
+            "forward": {
+                "args": ["inputs"],
+                "body": [f"{first_input_name} = inputs"],
+                "return": [],
+            },
+            "backward": {
+                "args": [],
+                "body": [],
+                "return": [],
+            },
+        }
+
+        node_characteristics = {}
+        var_replaces = {}
+        for n in nx.topological_sort(self._graph):
+            if n in self._input_nodes:
+                var_replaces["inputs"] = first_input_name
+                var_replaces["last_recorded_input"] = first_input_name
+            node_characteristics[n], var_replaces = self._graph.nodes[n]['inner'].optimize(
+                var_replaces, n, my_prefix, freeze_inits, freeze_params)
+            my_desc, var_replaces = utils.glue_optimizations(
+                my_desc, node_characteristics[n], var_replaces, n, my_prefix)
+        updates = []
+        gradients = []
+        for line in my_desc["backward"]["body"]:
+            if line.strip().startswith("__"):
+                varname = line.split(" = ")[0].strip()
+                if varname.endswith("_update"):
+                    updates.append(varname)
+                if varname.endswith("_gradient"):
+                    gradients.append(varname)
+        my_desc["backward"]["return"] = ['[' + ', '.join(updates) + ']', '[' + ', '.join(gradients) + ']']
+        return my_desc, var_replaces
+
+    def compile_optimized(self, freeze_inits=False, freeze_params=False) -> str:
+        desc, _ = self.optimize(freeze_inits=freeze_inits, freeze_params=freeze_params)
+        new_module_code = ""
+        if "__import__" in desc:
+            new_module_code += '\n'.join(desc["__import__"]) + '\n'
+        else:
+            # TODO: low priority: handle numpy as option
+            new_module_code += "import cupy as np\n"
+        new_module_code += "class DGM:\n"
+        for k, v in desc.items():
+            if k == "__import__":
+                continue
+            new_module_code += f"\tdef {k}(" + ', '.join(v["args"]) + "):\n\t\t"
+            new_module_code += '\n\t\t'.join(v["body"]) + '\n'
+            if v["return"]:
+                new_module_code += f"\t\treturn {','.join(v['return'])}\n"
+        return new_module_code
 
     # TODO: gradient weighting
     # TODO: learning rate

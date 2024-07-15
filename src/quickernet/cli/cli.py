@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 from .command import command
 from src.quickernet.nodes import node, linear, activations, synapses, costs, utils
-from src.quickernet.networks import graph
+from src.quickernet.networks import graph as graphs
 from src.quickernet.datasets import dataset
 
 # TODO: add support for making parameters necessary or optional
@@ -39,7 +39,7 @@ def run():
         activations.Softmax()
     ])
 
-    g = graph.DirectedGraphModel()
+    g = graphs.DirectedGraphModel()
     g.add_node(p1)
     g.add_node(p2)
     g.add_node(p3)
@@ -91,6 +91,29 @@ def run():
 
 
 @command(cmd_subparser, global_parser)
-def poop(a: int):
-    '''poop lol'''
-    return print(a + 10)
+def experiment(a: int):
+    input_dim = 5
+    output_dim = 3
+    lin = linear.Linear(input_dim, output_dim)
+    code = lin.optimize()
+    assert code[0] == ["inputs"]
+    assert code[1] == []
+    assert code[2] == ["np.dot(inputs, self.weight) + self.bias"]
+
+    # test output function
+    sig = activations.Sigmoid()
+    code = sig.optimize()
+    assert code[0] == ["inputs"]
+    assert code[1] == []
+    assert code[2] == ["1 / (1 + np.exp(-inputs))"]
+
+    pipenode = node.PipelineNode([lin, activations.Sigmoid()])
+    code = pipenode.optimize()
+    assert code[0] == ["inputs"]
+    assert code[1] == ["__step1_out = np.dot(inputs, __step1_weight) + __step1_bias"]
+    assert code[2] == ["1 / (1 + np.exp(-__step1_out))"]
+
+    # whole graph output should be (single str) code for it's optimized version
+    graph = graphs.DirectedGraphModel()
+    graph.add_node(pipenode)
+    code = graph.optimize()

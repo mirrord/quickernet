@@ -13,7 +13,7 @@ class Linear(NodeFunction):
         )
         # NOTE: are these even needed?
         self.input_shape = ('BATCH_N', input_dim)
-        self.output_shape = ('BATCH_N', output_dim)
+        # self.output_shape = ('BATCH_N', output_dim)
 
     def forward(self, inputs):
         return np.dot(inputs, self.weight) + self.bias
@@ -21,9 +21,9 @@ class Linear(NodeFunction):
     def __str__(self):
         return f"<{self.__class__.__name__}: ({self.weight.shape}, {self.bias.shape})>"
 
-    def backward(self, error_gradient, inputs):
+    def backward(self, error_gradient, last_recorded_input):
         bias_gradient = error_gradient
-        weight_gradient = np.dot(inputs.T, bias_gradient)
+        weight_gradient = np.dot(last_recorded_input.T, bias_gradient)
         return (bias_gradient, weight_gradient), np.dot(bias_gradient, self.weight.T)
 
     def update(self, updates, learning_rate):
@@ -39,8 +39,8 @@ class SelfLinear(NodeFunction):
     def forward(self, inputs):
         return np.matmul(*inputs)
 
-    def backward(self, error_gradient, inputs):
-        return None, [np.matmul(*list_except(inputs, idx)) * error_gradient for idx, _ in enumerate(inputs)]
+    def backward(self, error_gradient, last_recorded_input):
+        return None, [np.matmul(*list_except(last_recorded_input, idx)) * error_gradient for idx, _ in enumerate(last_recorded_input)]
 
     def update(self, updates, learning_rate):
         pass

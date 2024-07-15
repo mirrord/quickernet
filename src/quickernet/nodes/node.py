@@ -1,7 +1,7 @@
 # import numpy as np
 # import cupy as np
 from typing import List, Tuple
-from .utils import OptimizableFunction, NodeFunction
+from .utils import OptimizableFunction, NodeFunction, glue_optimizations, dprint
 
 
 class NodeFeedException(Exception):
@@ -49,13 +49,17 @@ class PipelineNode(NodeFunction):
         for idx, func in enumerate(self._pipeline):
             func.update(updates[idx], learning_rate)
 
-    def optimize(self) -> Tuple[list, str, list]:
-        my_inputs, lines, staged_outputs = self._pipeline[0].optimize()
-        opt_lines = [lines]
-        for func in self._pipeline[1:]:
-            params, lines, next_output = func.optimize()
-            for inarg, outarg in zip(staged_outputs, params):
-                opt_lines.append(f"\t{outarg} = {inarg}")
-            staged_outputs = next_output
-            opt_lines.append(lines)
-        return my_inputs, ''.join(opt_lines), staged_outputs
+    def optimize(self, var_replaces: dict, rep_idx: int = 0, prefix="__node", freeze_inits=False, freeze_params=False) -> Tuple[list, str, list]:
+        my_prefix = f"{prefix}{rep_idx}_step"
+        my_desc = self._pipeline[0].optimize(var_replaces, 0, my_prefix, freeze_inits=freeze_inits, freeze_params=freeze_params)
+        dprint(my_desc)
+        for idx, func in enumerate(self._pipeline[1:], start=1):
+            # TODO: fix for multiple inputs
+            var_replaces["inputs"] = f"self.{my_prefix}{idx - 1}_out0"
+            var_replaces["last_recorded_input"] = f"self.{my_prefix}{idx - 1}_out0"
+            desc = func.optimize(var_replaces, idx, my_prefix, freeze_inits=freeze_inits, freeze_params=freeze_params)
+            # print(f"glueing with: {func.__class__.__name__}")
+            # dprint(desc)
+            my_desc, _ = glue_optimizations(my_desc, desc, var_replaces, idx, my_prefix)
+            # dprint(my_desc)
+        return my_desc, var_replaces
