@@ -161,12 +161,19 @@ class DirectedGraphModel(utils.OptimizableFunction):
                 if varname.endswith("_update"):
                     updates.append(varname)
                 if varname.endswith("_gradient"):
-                    gradients.append(varname)
+                    gradient_node_index = varname.split(my_prefix)[1].split("_gradient")[0]
+                    try:
+                        gradient_node_index = int(gradient_node_index)
+                        if gradient_node_index in self._input_nodes:
+                            gradients.append(varname)
+                    except ValueError:
+                        pass
         my_desc["backward"]["return"] = ['[' + ', '.join(updates) + ']', '[' + ', '.join(gradients) + ']']
         return my_desc, var_replaces
 
     def compile_optimized(self, freeze_inits=False, freeze_params=False) -> str:
         desc, _ = self.optimize(freeze_inits=freeze_inits, freeze_params=freeze_params)
+        tab = "    "
         new_module_code = ""
         if "__import__" in desc:
             new_module_code += '\n'.join(desc["__import__"]) + '\n'
@@ -177,10 +184,10 @@ class DirectedGraphModel(utils.OptimizableFunction):
         for k, v in desc.items():
             if k == "__import__":
                 continue
-            new_module_code += f"\tdef {k}(" + ', '.join(v["args"]) + "):\n\t\t"
-            new_module_code += '\n\t\t'.join(v["body"]) + '\n'
+            new_module_code += f"{tab}def {k}(self, " + ', '.join(v["args"]) + f"):\n{tab}{tab}"
+            new_module_code += f'\n{tab}{tab}'.join(v["body"]) + '\n'
             if v["return"]:
-                new_module_code += f"\t\treturn {','.join(v['return'])}\n"
+                new_module_code += f"{tab}{tab}return {', '.join(v['return'])}\n"
         return new_module_code
 
     # TODO: gradient weighting

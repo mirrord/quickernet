@@ -1,7 +1,7 @@
 # import numpy as np
 # import cupy as np
 from typing import List, Tuple
-from .utils import OptimizableFunction, NodeFunction, glue_optimizations, dprint
+from .utils import OptimizableFunction, NodeFunction, glue_optimizations  # , dprint
 
 
 class NodeFeedException(Exception):
@@ -52,7 +52,7 @@ class PipelineNode(NodeFunction):
     def optimize(self, var_replaces: dict, rep_idx: int = 0, prefix="__node", freeze_inits=False, freeze_params=False) -> Tuple[list, str, list]:
         my_prefix = f"{prefix}{rep_idx}_step"
         my_desc = self._pipeline[0].optimize(var_replaces, 0, my_prefix, freeze_inits=freeze_inits, freeze_params=freeze_params)
-        dprint(my_desc)
+        # dprint(my_desc)
         for idx, func in enumerate(self._pipeline[1:], start=1):
             # TODO: fix for multiple inputs
             var_replaces["inputs"] = f"self.{my_prefix}{idx - 1}_out0"

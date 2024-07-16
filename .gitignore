@@ -4,7 +4,8 @@ build
 *.c
 *.pyd
 *.pyc
-.vscode/launch.json
+.vscode/*
+.venv/*
 .editorconfig
 datasets/*
-.vscode/settings.json
+

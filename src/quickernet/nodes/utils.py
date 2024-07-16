@@ -67,18 +67,32 @@ def list_except(lst, idx):
 
 # split function into parameters, body, and return statements
 def characterize_function(f, replacements: dict = None, rep_idx: int = 0, prefix: str = "__") -> dict:
+    # NOTE: this function does not preserve tabs
     replacements = replacements or {}
     source_lines = getsourcelines(f)[0]
     body_lines = []
     has_return = False
+    in_block = False
     for idx, line in enumerate(source_lines[1:], start=1):
-        if line.strip().startswith('return'):
+        stripped_line = line.strip()
+        if stripped_line.startswith('return'):
             has_return = True
             break
-        if line.strip() and not line.strip().startswith('#'):
-            replacements.update(get_self_token_replacements(line, rep_idx, prefix))
-            line = replace_all(line, replacements)
-            body_lines.append(line.strip())
+        if stripped_line and not stripped_line.startswith('#'):
+            replacements.update(get_self_token_replacements(stripped_line, rep_idx, prefix))
+            stripped_line = replace_all(stripped_line, replacements)
+            if stripped_line in ")]}":
+                body_lines[-1] += ' ' + stripped_line
+                in_block = False
+            elif stripped_line[-1] in "([{":
+                in_block = True
+                body_lines.append(stripped_line)
+            elif in_block:
+                body_lines[-1] += ' ' + stripped_line
+                if stripped_line[-1] in ")]}":
+                    in_block = False
+            else:
+                body_lines.append(stripped_line)
     return_lines = []
     if has_return:
         full_return_line = ' '.join(source_lines[idx:]).strip().replace('\t', ' ')
