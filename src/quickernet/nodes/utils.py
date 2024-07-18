@@ -66,18 +66,28 @@ def list_except(lst, idx):
 
 
 # split function into parameters, body, and return statements
-def characterize_function(f, replacements: dict = None, rep_idx: int = 0, prefix: str = "__") -> dict:
+def characterize_function(f, replacements: dict = None, rep_idx: int = 0, prefix: str = "__", replace_parameters=False) -> dict:
     # NOTE: this function does not preserve tabs
     replacements = replacements or {}
     source_lines = getsourcelines(f)[0]
     body_lines = []
     has_return = False
     in_block = False
+    param_list = list(signature(f).parameters.keys())
+    if replace_parameters:
+        for idx in range(len(param_list)):
+            param_name = param_list[idx]
+            if param_name.startswith("__"):
+                continue
+            param_list[idx] = f"{prefix}{rep_idx}_{param_name.upper()}"
+            replacements[param_name] = param_list[idx]
     for idx, line in enumerate(source_lines[1:], start=1):
         stripped_line = line.strip()
         if stripped_line.startswith('return'):
             has_return = True
             break
+        if stripped_line == "super().__init__()":
+            continue
         if stripped_line and not stripped_line.startswith('#'):
             replacements.update(get_self_token_replacements(stripped_line, rep_idx, prefix))
             stripped_line = replace_all(stripped_line, replacements)
@@ -99,8 +109,10 @@ def characterize_function(f, replacements: dict = None, rep_idx: int = 0, prefix
         replacements.update(get_self_token_replacements(full_return_line, rep_idx, prefix))
         full_return_line = replace_all(full_return_line, replacements)
         return_lines = params_only(full_return_line)
+    if replace_parameters:
+        replacements = {k: v for k, v in replacements.items() if v not in param_list}
     return {
-        "args": list(signature(f).parameters.keys()),
+        "args": param_list,
         "body": body_lines,
         "return": return_lines
     }, replacements
@@ -110,11 +122,10 @@ def characterize_function(f, replacements: dict = None, rep_idx: int = 0, prefix
 def glue_inits(fd1: dict, fd2: dict, variable_replacements: dict, rep_idx=0, prefix="node"):
     # glue parameters together
     params = fd1.get("args", [])
-    for p in fd2.get("args", []):
-        if p in params:
-            variable_replacements[p] = p + "_" + str(len([a for a in params if a.startswith(p)]))
-            p = variable_replacements[p]
-        params.append(p)
+    params.extend(fd2.get("args", []))
+    # TODO: this block incorrectly replaces variables
+    # create a dict of variable base names with their counts to properly track their indices?
+    # or maybe just replace them with prefixed names like everything else
 
     # glue bodies together by stitching outputs from one to inputs of the other
     body = fd1.get("body", [])
@@ -168,12 +179,8 @@ def glue_forwards(fd1: dict, fd2: dict, variable_replacements: dict, rep_idx=0, 
 def glue_backwards(fd1: dict, fd2: dict, variable_replacements: dict, rep_idx=0, prefix="node"):
     # glue parameters together
     param = "error_gradient"  # backward() always takes in the error gradient
-
     # glue bodies together by stitching outputs from one to inputs of the other
     body = fd2.get("body", [])
-    # backward() always returns a tuple of (update, gradient)
-    # but sometimes the update is None, and/or the gradient is just passed along
-    # TODO: filter out the trivial cases
     output_update, output_gradient = fd2.get("return", ("None", param))
     # TODO: collate updates & return aggregate
     does_update = output_update != "None"
@@ -212,7 +219,6 @@ def glue_backwards(fd1: dict, fd2: dict, variable_replacements: dict, rep_idx=0,
 
 
 def glue_optimizations(fd1: dict, fd2: dict, var_replaces: dict, rep_idx=0, prefix="node"):
-    # TODO: coordinate variable name changes between functions
     inits, var_replaces = glue_inits(fd1.get("__init__", {}), fd2.get("__init__", {}), var_replaces, rep_idx, prefix)
     forwards, var_replaces = glue_forwards(fd1.get("forward", {}), fd2.get("forward", {}), var_replaces, rep_idx, prefix)
     backwards, var_replaces = glue_backwards(fd1.get("backward", {}), fd2.get("backward", {}), var_replaces, rep_idx, prefix)
@@ -220,7 +226,7 @@ def glue_optimizations(fd1: dict, fd2: dict, var_replaces: dict, rep_idx=0, pref
         "__init__": inits,
         "forward": forwards,
         "backward": backwards,
-    }, var_replaces
+    }
 
 
 # NOTE: these functions are tentative and will probably be moved to a more appropriate location later
@@ -266,13 +272,16 @@ class OptimizableFunction:
             var_replaces["last_recorded_input"] = f"self.{prefix}{rep_idx - 1}_out0"
         for f in funcs:
             if hasattr(f, '__code__'):
-                desc[f.__name__], vr = characterize_function(f, var_replaces, rep_idx, prefix)
+                desc[f.__name__], vr = characterize_function(f, var_replaces, rep_idx, prefix, f.__name__ == "__init__")
                 var_replaces.update(vr)
         return desc
 
 
 class NodeFunction(OptimizableFunction):
     input_shape = None
+
+    def __init__(self):
+        super().__init__()
 
     # TODO: implement optimize method to account for standardize_input method
     def __call__(self, inputs):

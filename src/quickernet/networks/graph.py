@@ -1,6 +1,7 @@
 from typing import Tuple
 import networkx as nx
 from tqdm import trange, tqdm
+import cupy as np
 from ..nodes import node, utils
 from ..datasets import dataset
 
@@ -61,7 +62,6 @@ class DirectedGraphModel(utils.OptimizableFunction):
         self._output_nodes = self._find_output_nodes()
 
     def forward(self, inputs):
-        graph_walker = nx.topological_sort(self._graph)
         self._output_nodes = self._output_nodes or self._find_output_nodes()
         self._input_nodes = self._input_nodes or self._find_input_nodes()
         if not self._input_nodes:
@@ -69,7 +69,7 @@ class DirectedGraphModel(utils.OptimizableFunction):
         if not self._output_nodes:
             raise NetworkException("No output nodes found in graph.")
         inputs = self._standardize_input(inputs)
-        for n in graph_walker:
+        for n in nx.topological_sort(self._graph):
             staged_input = [
                 self._graph.nodes[p]['inner'].last_output for p in self._graph.predecessors(n)] or inputs.get(n, [])
             staged_input = staged_input if len(
@@ -77,8 +77,10 @@ class DirectedGraphModel(utils.OptimizableFunction):
             try:
                 self._graph.nodes[n]['inner'].forward(staged_input)
             except ValueError:
-                raise NetworkException(f"Axis mismatch on forward node {n} (input frome nodes: {list(self._graph.predecessors(n))}) which expects {
-                                       self._graph.nodes[n]['inner'].input_shape} but got {[n.shape for n in staged_input]} instead.")
+                staged_shape = staged_input.shape if isinstance(
+                    staged_input, np.ndarray) else [n.shape for n in staged_input]
+                raise NetworkException(f"Axis mismatch on forward node {n} (input from nodes: {list(self._graph.predecessors(n))}) which expects {
+                                       self._graph.nodes[n]['inner'].input_shape} but got {staged_shape} instead.")
             except AttributeError as e:
                 raise NetworkException(
                     f"Node {n} has no input, or input is of incorrect form: {e}")
@@ -119,7 +121,7 @@ class DirectedGraphModel(utils.OptimizableFunction):
 
     # TODO: track input & output sites
     # TODO: handle multiple inputs to nodes
-    def optimize(self, rep_idx: int = 0, prefix="__model", freeze_inits=False, freeze_params=False) -> Tuple[list, str, list]:
+    def optimize(self, rep_idx: int = 0, prefix="__model", freeze_inits=False, freeze_params=False) -> Tuple[dict, dict]:
         self._output_nodes = self._output_nodes or self._find_output_nodes()
         self._input_nodes = self._input_nodes or self._find_input_nodes()
         my_prefix = f"{prefix}{rep_idx}_node"
@@ -149,9 +151,9 @@ class DirectedGraphModel(utils.OptimizableFunction):
             if n in self._input_nodes:
                 var_replaces["inputs"] = first_input_name
                 var_replaces["last_recorded_input"] = first_input_name
-            node_characteristics[n], var_replaces = self._graph.nodes[n]['inner'].optimize(
+            node_characteristics[n] = self._graph.nodes[n]['inner'].optimize(
                 var_replaces, n, my_prefix, freeze_inits, freeze_params)
-            my_desc, var_replaces = utils.glue_optimizations(
+            my_desc = utils.glue_optimizations(
                 my_desc, node_characteristics[n], var_replaces, n, my_prefix)
         updates = []
         gradients = []
@@ -168,11 +170,11 @@ class DirectedGraphModel(utils.OptimizableFunction):
                             gradients.append(varname)
                     except ValueError:
                         pass
-        my_desc["backward"]["return"] = ['[' + ', '.join(updates) + ']', '[' + ', '.join(gradients) + ']']
-        return my_desc, var_replaces
+        my_desc["backward"]["return"] = ['[' + ', '.join(reversed(updates)) + ']', '[' + ', '.join(reversed(gradients)) + ']']
+        return my_desc
 
     def compile_optimized(self, freeze_inits=False, freeze_params=False) -> str:
-        desc, _ = self.optimize(freeze_inits=freeze_inits, freeze_params=freeze_params)
+        desc = self.optimize(freeze_inits=freeze_inits, freeze_params=freeze_params)
         tab = "    "
         new_module_code = ""
         if "__import__" in desc:

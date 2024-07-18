@@ -152,8 +152,10 @@ def test_linear_optimize():
     target = {
         "__imports__": [],
         "__init__": {
-            "args": ["input_dim", "output_dim"],
-            "body": ["self.__node0_bias = np.random.randn(1, output_dim)", "self.__node0_weight = np.random.randn(input_dim, output_dim) * np.sqrt(", "1 / (input_dim + output_dim)", ")", "self.__node0_input_shape = ('BATCH_N', input_dim)"],
+            "args": ["__node0_INPUT_DIM", "__node0_OUTPUT_DIM"],
+            "body": ["self.__node0_bias = np.random.randn(1, __node0_OUTPUT_DIM)",
+                     "self.__node0_weight = np.random.randn(__node0_INPUT_DIM, __node0_OUTPUT_DIM) * np.sqrt( 1 / (__node0_INPUT_DIM + __node0_OUTPUT_DIM) )",
+                     "self.__node0_input_shape = ('BATCH_N', __node0_INPUT_DIM)"],
             "return": [],
         },
         "forward": {
@@ -201,6 +203,23 @@ def test_synapse_optimize():
         "forward": {
             "args": ["inputs"],
             "body": [],
+            "return": ["inputs"],
+        },
+        "backward": {
+            "args": ["error_gradient", "last_recorded_input"],
+            "body": [],
+            "return": ["None", "error_gradient"],
+        },
+    }
+    assert code["forward"] == target["forward"]
+    assert code["backward"] == target["backward"]
+
+    syn([1, 2, 3])
+    code = syn.optimize({})
+    target = {
+        "forward": {
+            "args": ["inputs"],
+            "body": [],
             "return": ["sum(inputs)"],
         },
         "backward": {
@@ -220,23 +239,23 @@ def test_pipeline_optimize():
     lin = Linear(input_dim, output_dim)
     lin2 = Linear(input_dim, output_dim)
     pipenode = PipelineNode([syn, lin, lin2, Sigmoid()])
-    code, _ = pipenode.optimize({})
+    code = pipenode.optimize({})
     target = {
         "__imports__": [],
         "__init__": {
-            "args": ["input_dim", "output_dim", "input_dim_1", "output_dim_1"],
-            "body": ["self.__node0_step1_bias = np.random.randn(1, output_dim)",
-                     "self.__node0_step1_weight = np.random.randn(input_dim, output_dim) * np.sqrt( 1 / (input_dim + output_dim) )",
-                     "self.__node0_step1_input_shape = ('BATCH_N', input_dim)",
+            "args": ["__node0_step1_INPUT_DIM", "__node0_step1_OUTPUT_DIM", "__node0_step2_INPUT_DIM", "__node0_step2_OUTPUT_DIM"],
+            "body": ["self.__node0_step1_bias = np.random.randn(1, __node0_step1_OUTPUT_DIM)",
+                     "self.__node0_step1_weight = np.random.randn(__node0_step1_INPUT_DIM, __node0_step1_OUTPUT_DIM) * np.sqrt( 1 / (__node0_step1_INPUT_DIM + __node0_step1_OUTPUT_DIM) )",
+                     "self.__node0_step1_input_shape = ('BATCH_N', __node0_step1_INPUT_DIM)",
 
-                     "self.__node0_step2_bias = np.random.randn(1, output_dim_1)",
-                     "self.__node0_step2_weight = np.random.randn(input_dim_1, output_dim_1) * np.sqrt( 1 / (input_dim_1 + output_dim_1) )",
-                     "self.__node0_step2_input_shape = ('BATCH_N', input_dim_1)"],
+                     "self.__node0_step2_bias = np.random.randn(1, __node0_step2_OUTPUT_DIM)",
+                     "self.__node0_step2_weight = np.random.randn(__node0_step2_INPUT_DIM, __node0_step2_OUTPUT_DIM) * np.sqrt( 1 / (__node0_step2_INPUT_DIM + __node0_step2_OUTPUT_DIM) )",
+                     "self.__node0_step2_input_shape = ('BATCH_N', __node0_step2_INPUT_DIM)"],
             "return": [],
         },
         "forward": {
             "args": ["inputs"],
-            "body": ["self.__node0_step0_out0 = sum(inputs)",
+            "body": ["self.__node0_step0_out0 = inputs",
                      "self.__node0_step1_out0 = np.dot(self.__node0_step0_out0, self.__node0_step1_weight) + self.__node0_step1_bias",
                      "self.__node0_step2_out0 = np.dot(self.__node0_step1_out0, self.__node0_step2_weight) + self.__node0_step2_bias"],
             "return": ["1 / (1 + np.exp(-self.__node0_step2_out0))"],
@@ -271,14 +290,14 @@ def test_graph_optimize_simple_pipeline():
     pipenode = PipelineNode([lin, Sigmoid()])
     graph = DirectedGraphModel()
     graph.add_node(pipenode)
-    code_dict, _ = graph.optimize()
+    code_dict = graph.optimize()
     target = {
         "__imports__": [],
         "__init__": {
-            "args": ["input_dim", "output_dim"],
-            "body": ["self.__model0_node0_step0_bias = np.random.randn(1, output_dim)",
-                     "self.__model0_node0_step0_weight = np.random.randn(input_dim, output_dim) * np.sqrt( 1 / (input_dim + output_dim) )",
-                     "self.__model0_node0_step0_input_shape = ('BATCH_N', input_dim)"],
+            "args": ["__model0_node0_step0_INPUT_DIM", "__model0_node0_step0_OUTPUT_DIM"],
+            "body": ["self.__model0_node0_step0_bias = np.random.randn(1, __model0_node0_step0_OUTPUT_DIM)",
+                     "self.__model0_node0_step0_weight = np.random.randn(__model0_node0_step0_INPUT_DIM, __model0_node0_step0_OUTPUT_DIM) * np.sqrt( 1 / (__model0_node0_step0_INPUT_DIM + __model0_node0_step0_OUTPUT_DIM) )",
+                     "self.__model0_node0_step0_input_shape = ('BATCH_N', __model0_node0_step0_INPUT_DIM)"],
             "return": [],
         },
         "forward": {
@@ -305,10 +324,10 @@ def test_graph_optimize_simple_pipeline():
     code = graph.compile_optimized()
     assert code == '''import cupy as np
 class DGM:
-    def __init__(self, input_dim, output_dim):
-        self.__model0_node0_step0_bias = np.random.randn(1, output_dim)
-        self.__model0_node0_step0_weight = np.random.randn(input_dim, output_dim) * np.sqrt( 1 / (input_dim + output_dim) )
-        self.__model0_node0_step0_input_shape = ('BATCH_N', input_dim)
+    def __init__(self, __model0_node0_step0_INPUT_DIM, __model0_node0_step0_OUTPUT_DIM):
+        self.__model0_node0_step0_bias = np.random.randn(1, __model0_node0_step0_OUTPUT_DIM)
+        self.__model0_node0_step0_weight = np.random.randn(__model0_node0_step0_INPUT_DIM, __model0_node0_step0_OUTPUT_DIM) * np.sqrt( 1 / (__model0_node0_step0_INPUT_DIM + __model0_node0_step0_OUTPUT_DIM) )
+        self.__model0_node0_step0_input_shape = ('BATCH_N', __model0_node0_step0_INPUT_DIM)
     def forward(self, inputs):
         self.__model0_first_in = inputs
         self.__model0_node0_step0_out0 = np.dot(self.__model0_first_in, self.__model0_node0_step0_weight) + self.__model0_node0_step0_bias
@@ -339,38 +358,58 @@ class DGM:
 def test_graph_optimize_long_pipeline():
     # whole graph output should be (single str) code for it's optimized version
     input_dim = 5
-    output_dim = 3
+    output_dim = 4
+    second_output_dim = 3
     syn = SynapseSum()
     lin = Linear(input_dim, output_dim)
-    lin2 = Linear(input_dim, output_dim)
+    lin2 = Linear(output_dim, second_output_dim)
     pipenode = PipelineNode([syn, lin, lin2, Sigmoid()])
     graph = DirectedGraphModel()
     graph.add_node(pipenode)
-    code = graph.optimize()
-    assert code == '''
-import cupy as np
-class DGM:
-    def __init__(self, input_dim, output_dim):
-        self.__node0_step0_bias = np.random.randn(1, output_dim)
-        self.__node0_step0_weight = np.random.randn(input_dim, output_dim) * np.sqrt(
-        1 / (input_dim + output_dim)
-        )
-        self.input_shape = ('BATCH_N', input_dim)
-    def __call__(self, inputs):
-        self.__node0_step0_out = np.dot(inputs, self.__node0_step0_weight) + self.__node0_step0_bias
-        return 1 / (1 + np.exp(-self.__node0_step0_out))
-    def backward(self, error_gradient, inputs):
-        forward_output = 1 / (1 + np.exp(-inputs))
-        __step0_gradient = error_gradient * forward_output * (1 - forward_output)
-        bias_gradient = __step0_gradient
-        weight_gradient = np.dot(self.__node0_step0_out.T, bias_gradient)
-        return (bias_gradient, weight_gradient), np.dot(bias_gradient, self.__node0_step0_weight.T)
-'''
 
-    # ensure that forward & backward results are the same
+    # run forward() so that it optimizes away the synapsesum
     x = np.random.randn(4, 5)
     dgn_output = graph.forward(x)
-    DGM = exec(code)
-    dgm = DGM()
-    opti_output = dgm(x)
+
+    code = graph.compile_optimized()
+    assert code == '''import cupy as np
+class DGM:
+    def __init__(self, __model0_node0_step1_INPUT_DIM, __model0_node0_step1_OUTPUT_DIM, __model0_node0_step2_INPUT_DIM, __model0_node0_step2_OUTPUT_DIM):
+        self.__model0_node0_step1_bias = np.random.randn(1, __model0_node0_step1_OUTPUT_DIM)
+        self.__model0_node0_step1_weight = np.random.randn(__model0_node0_step1_INPUT_DIM, __model0_node0_step1_OUTPUT_DIM) * np.sqrt( 1 / (__model0_node0_step1_INPUT_DIM + __model0_node0_step1_OUTPUT_DIM) )
+        self.__model0_node0_step1_input_shape = ('BATCH_N', __model0_node0_step1_INPUT_DIM)
+        self.__model0_node0_step2_bias = np.random.randn(1, __model0_node0_step2_OUTPUT_DIM)
+        self.__model0_node0_step2_weight = np.random.randn(__model0_node0_step2_INPUT_DIM, __model0_node0_step2_OUTPUT_DIM) * np.sqrt( 1 / (__model0_node0_step2_INPUT_DIM + __model0_node0_step2_OUTPUT_DIM) )
+        self.__model0_node0_step2_input_shape = ('BATCH_N', __model0_node0_step2_INPUT_DIM)
+    def forward(self, inputs):
+        self.__model0_first_in = inputs
+        self.__model0_node0_step0_out0 = self.__model0_first_in
+        self.__model0_node0_step1_out0 = np.dot(self.__model0_node0_step0_out0, self.__model0_node0_step1_weight) + self.__model0_node0_step1_bias
+        self.__model0_node0_step2_out0 = np.dot(self.__model0_node0_step1_out0, self.__model0_node0_step2_weight) + self.__model0_node0_step2_bias
+        return 1 / (1 + np.exp(-self.__model0_node0_step2_out0))
+    def backward(self, error_gradient):
+        forward_output = 1 / (1 + np.exp(-self.__model0_node0_step2_out0))
+        __model0_node0_step3_gradient = error_gradient * forward_output * (1 - forward_output)
+        bias_gradient = __model0_node0_step3_gradient
+        weight_gradient = np.dot(self.__model0_node0_step1_out0.T, bias_gradient)
+        __model0_node0_step2_update = (bias_gradient, weight_gradient)
+        __model0_node0_step2_gradient = np.dot(bias_gradient, self.__model0_node0_step2_weight.T)
+        bias_gradient = __model0_node0_step2_gradient
+        weight_gradient = np.dot(self.__model0_node0_step0_out0.T, bias_gradient)
+        __model0_node0_step1_update = (bias_gradient, weight_gradient)
+        __model0_node0_step1_gradient = np.dot(bias_gradient, self.__model0_node0_step1_weight.T)
+        __model0_node0_gradient = __model0_node0_step1_gradient
+        return [__model0_node0_step1_update, __model0_node0_step2_update], [__model0_node0_gradient]
+'''
+
+    compiled_net = compile(code, "__autogenerated__", "exec", dont_inherit=1)
+    exec(compiled_net, globals())
+
+    # ensure that forward & backward results are the same
+    dgm = DGM(input_dim, output_dim, output_dim, second_output_dim)
+    dgm._DGM__model0_node0_step1_bias = graph._graph.nodes[0]['inner']._pipeline[1].bias
+    dgm._DGM__model0_node0_step1_weight = graph._graph.nodes[0]['inner']._pipeline[1].weight
+    dgm._DGM__model0_node0_step2_bias = graph._graph.nodes[0]['inner']._pipeline[2].bias
+    dgm._DGM__model0_node0_step2_weight = graph._graph.nodes[0]['inner']._pipeline[2].weight
+    opti_output = dgm.forward(x)
     assert np.allclose(dgn_output, opti_output)
