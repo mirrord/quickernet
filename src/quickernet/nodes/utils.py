@@ -123,9 +123,6 @@ def glue_inits(fd1: dict, fd2: dict, variable_replacements: dict, rep_idx=0, pre
     # glue parameters together
     params = fd1.get("args", [])
     params.extend(fd2.get("args", []))
-    # TODO: this block incorrectly replaces variables
-    # create a dict of variable base names with their counts to properly track their indices?
-    # or maybe just replace them with prefixed names like everything else
 
     # glue bodies together by stitching outputs from one to inputs of the other
     body = fd1.get("body", [])
