@@ -23,6 +23,10 @@ def replace_all(text: str, replacements: dict) -> str:
     return text
 
 
+def list_except(lst, idx):
+    return lst[:idx] + lst[idx + 1:]
+
+
 def dprint(d: dict, indent=1):
     brace_tabs = '\t' * (indent - 1)
     print(brace_tabs, "{")

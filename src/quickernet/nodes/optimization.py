@@ -1,7 +1,6 @@
 from typing import Any, Tuple
 from re import finditer
 from inspect import getsourcelines, signature
-import cupy as np
 from .utils import replace_all, params_only
 
 
@@ -18,10 +17,6 @@ def get_self_token_replacements(code_line: str, rep_idx: int, prefix: str) -> di
             new_token = token.replace('self.', my_prefix)
             replacements[token] = new_token
     return replacements
-
-
-def list_except(lst, idx):
-    return lst[:idx] + lst[idx + 1:]
 
 
 # split function into parameters, body, and return statements
@@ -101,7 +96,6 @@ def glue_inits(fd1: dict, fd2: dict, variable_replacements: dict, rep_idx=0, pre
 def glue_forwards(fd1: dict, fd2: dict, variable_replacements: dict, rep_idx=0, prefix="node"):
     # glue parameters together
     params = fd1.get("args", [])
-    # TODO: coordinate variable name changes between functions
 
     # glue bodies together by stitching outputs from one to inputs of the other
     body = fd1.get("body", [])
@@ -183,27 +177,6 @@ def glue_optimizations(fd1: dict, fd2: dict, var_replaces: dict, rep_idx=0, pref
         "forward": forwards,
         "backward": backwards,
     }
-
-
-# NOTE: these functions are tentative and will probably be moved to a more appropriate location later
-def shuffle_in_unison(a, b):
-    assert len(a) == len(b)
-    p = np.random.permutation(len(a))
-    a[:] = a[p]
-    b[:] = b[p]
-
-
-def binarize(y, num_classes):
-    y = y.astype(int)
-    targets = np.zeros((len(y), num_classes), np.float32)
-    for i in range(targets.shape[0]):
-        targets[i][y[i]] = 1
-    return targets
-
-
-def debinarize(y):
-    return y.argmax(axis=1)
-#####
 
 
 class OptimizableFunction:

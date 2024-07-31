@@ -1,6 +1,6 @@
 
 import cupy as np
-from .utils import NodeFunction
+from .node import NodeFunction
 
 
 class NoActivation(NodeFunction):

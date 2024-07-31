@@ -24,8 +24,15 @@ def command(subs, parent_parser):
 
         @wraps(function)
         def wrapper(args: argparse.Namespace):
-            params = {param: args.__dict__[
-                param] for param in inspect.signature(function).parameters if param in args.__dict__}
+
+            params = {}
+            for param_name, param in inspect.signature(function).parameters.items():
+                params[param_name] = args.__dict__.get(param_name, None)
+                if params[param_name] is None:
+                    if param.default == inspect.Parameter.empty:
+                        raise CLIError(f"missing required argument: {param_name} of type {param.annotation.__name__}")
+                    else:
+                        params[param_name] = param.default
             result = function(**params)
             return result
 

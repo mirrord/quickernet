@@ -1,5 +1,6 @@
 import cupy as np
-from .utils import NodeFunction, list_except
+from .node import NodeFunction
+from .utils import list_except
 
 
 class Linear(NodeFunction):

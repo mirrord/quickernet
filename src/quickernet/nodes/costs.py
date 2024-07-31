@@ -1,6 +1,6 @@
 import cupy as np
 
-from .utils import OptimizableFunction
+from .optimization import OptimizableFunction
 
 
 class CostFunction(OptimizableFunction):

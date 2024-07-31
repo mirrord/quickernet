@@ -1,6 +1,6 @@
 from ..datasets.dataset import Dataset
 from .graph import DirectedGraphModel
-from ..nodes.utils import debinarize
+from ..datasets.utils import debinarize
 
 
 def get_accuracy(model: DirectedGraphModel, dataset: Dataset):
