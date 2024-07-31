@@ -8,13 +8,10 @@ from src.quickernet.nodes import node, linear, activations, synapses, costs, uti
 from src.quickernet.networks import graph as graphs
 from src.quickernet.datasets import dataset
 
-# TODO: add support for bool
-# TODO: add configurable helpstrings for arguments (somehow)
 
 global_parser = argparse.ArgumentParser(
     description="Experiment with quickernet.")  # , add_help=False)
-cmd_subparser = global_parser.add_subparsers(
-    help="base command", dest="command")
+cmd_subparser = global_parser.add_subparsers(title="command", dest="command")
 
 
 @command(cmd_subparser, global_parser)
@@ -90,7 +87,10 @@ def run():
 
 
 @command(cmd_subparser, global_parser)
-def experiment(a: int = 0):
+def experiment(a: bool):
+    '''just an experiment.
+    @a: bool: just a boolean argument
+    '''
     print(f"just an experiment! {a}")
 
 
