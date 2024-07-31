@@ -2,7 +2,8 @@ from typing import Tuple
 import networkx as nx
 from tqdm import trange, tqdm
 import cupy as np
-from ..nodes import node, utils
+from ..nodes.optimization import OptimizableFunction, glue_optimizations
+from ..nodes.pipeline import PipelineNode
 from ..datasets import dataset
 
 
@@ -10,15 +11,16 @@ class NetworkException(Exception):
     pass
 
 
-class DirectedGraphModel(utils.OptimizableFunction):
+class DirectedGraphModel(OptimizableFunction):
     def __init__(self):
         self._graph = nx.DiGraph()
         self._input_nodes = []
         self._output_nodes = []
         self.last_outputs = {}
+        self._site_adj = {}
         self._learning_rate = 0.01
 
-    def add_node(self, node: node.PipelineNode, is_input=False, is_output=False):
+    def add_node(self, node: PipelineNode, is_input=False, is_output=False):
         node_idx = len(self._graph)
         self._graph.add_node(node_idx, inner=node)
         if is_input:
@@ -26,9 +28,18 @@ class DirectedGraphModel(utils.OptimizableFunction):
         if is_output:
             self._output_nodes.append(node_idx)
 
-    # TODO: check for cycles
-    def add_edge(self, source: int, target: int):
+    def add_edge(self, source: int, target: int, input_site=None, output_site=None):
         self._graph.add_edge(source, target)
+        try:
+            a = nx.topological_sort(self._graph)
+            next(a)
+        except nx.NetworkXUnfeasible:
+            self._graph.remove_edge(source, target)
+            raise NetworkException(
+                "Cycle detected in graph. Cannot add edge.")
+        output_site = output_site if output_site is not None else 0
+        input_site = input_site if input_site is not None else 0
+        self._site_adj[source] = (output_site, input_site)
 
     def assign_io_nodes(self, input_nodes: list, output_nodes: list):
         self._input_nodes = input_nodes
@@ -153,7 +164,7 @@ class DirectedGraphModel(utils.OptimizableFunction):
                 var_replaces["last_recorded_input"] = first_input_name
             node_characteristics[n] = self._graph.nodes[n]['inner'].optimize(
                 var_replaces, n, my_prefix, freeze_inits, freeze_params)
-            my_desc = utils.glue_optimizations(
+            my_desc = glue_optimizations(
                 my_desc, node_characteristics[n], var_replaces, n, my_prefix)
         updates = []
         gradients = []
@@ -195,7 +206,7 @@ class DirectedGraphModel(utils.OptimizableFunction):
     # TODO: gradient weighting
     # TODO: learning rate
     # TODO: handle multiple output nodes
-    def train(self, inputs, targets, cost_func: utils.OptimizableFunction, epochs):
+    def train(self, inputs, targets, cost_func: OptimizableFunction, epochs):
         cost_history = {k: [] for k in self._output_nodes}
         for _ in trange(epochs, desc="training..."):
             outputs = self.forward(inputs)
@@ -207,7 +218,7 @@ class DirectedGraphModel(utils.OptimizableFunction):
             self.update(updates)
         return cost_history
 
-    def train_alternate(self, training_data: dataset.Dataset, cost_func: utils.OptimizableFunction, epochs, batch_size):
+    def train_alternate(self, training_data: dataset.Dataset, cost_func: OptimizableFunction, epochs, batch_size):
         random_subset_size = 100
         cost_history = {k: [] for k in self._output_nodes}
         batched_epoch_size = len(training_data) // batch_size
@@ -227,41 +238,13 @@ class DirectedGraphModel(utils.OptimizableFunction):
             k: cost_history[k] + [self.test_on(subdata, cost_func)] for k in self._output_nodes}
         return cost_history
 
-    def train_on(self, dataset: dataset.Dataset, cost_func: utils.OptimizableFunction, epochs):
+    def train_on(self, dataset: dataset.Dataset, cost_func: OptimizableFunction, epochs):
         return self.train(dataset._inputs, dataset._labels, cost_func, epochs)
 
     # TODO: decide how to handle multiple output nodes vs single output node
-    def test(self, inputs, targets, cost_func: utils.OptimizableFunction):
+    def test(self, inputs, targets, cost_func: OptimizableFunction):
         outputs = self.forward(inputs)
         return cost_func(outputs, targets)
 
-    def test_on(self, dataset: dataset.Dataset, cost_func: utils.OptimizableFunction):
+    def test_on(self, dataset: dataset.Dataset, cost_func: OptimizableFunction):
         return self.test(dataset._inputs, dataset._labels, cost_func)
-
-    # TODO: this is not the right place for this function - move to utils
-    def get_accuracy(self, dataset: dataset.Dataset):
-        def multiclass_precision_and_recall(correct_preds, all_predictions, target_class, labels):
-            # failed because all_predictions is a single-element array
-            predictions_in_class = all_predictions == target_class
-            true_pos = correct_preds[predictions_in_class].sum().item()
-            false_pos = (sum(predictions_in_class) - true_pos).item()
-            false_neg = sum((~predictions_in_class)[
-                            labels == target_class]).item()
-            prec_denom = true_pos + false_pos
-            rec_denom = true_pos + false_neg
-            precision = 0 if prec_denom == 0 else true_pos / prec_denom
-            recall = 0 if rec_denom == 0 else true_pos / rec_denom
-            return precision, recall
-
-        dataset.debinarize()
-        num_classes = dataset.num_classes()
-        expected_outputs = dataset._labels
-        # result is a single-element array!!!
-        forward_output = self.forward(dataset._inputs)
-        outputs = utils.debinarize(forward_output)
-        correct_preds = outputs == expected_outputs
-        accuracies = {'all': (sum(correct_preds) / len(outputs)).item()}
-        accuracies.update({f"class_{i}": (multiclass_precision_and_recall(
-            correct_preds, outputs, i, dataset._labels)) for i in range(num_classes)})
-        dataset.binarize(num_classes)
-        return accuracies

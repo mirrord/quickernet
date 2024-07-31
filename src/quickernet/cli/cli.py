@@ -1,7 +1,7 @@
 
 import argparse
 import matplotlib.pyplot as plt
-# import cupy as np
+import cupy as np
 
 from .command import command
 from src.quickernet.nodes import node, linear, activations, synapses, costs, utils
@@ -13,7 +13,7 @@ from src.quickernet.datasets import dataset
 # TODO: add configurable helpstrings for arguments (somehow)
 
 global_parser = argparse.ArgumentParser(
-    description="Experiment with quicknet.")  # , add_help=False)
+    description="Experiment with quickernet.")  # , add_help=False)
 cmd_subparser = global_parser.add_subparsers(
     help="base command", dest="command")
 

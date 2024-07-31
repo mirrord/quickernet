@@ -1,6 +1,6 @@
 
 from typing import List
-from .utils import NodeFunction
+from .node import NodeFunction
 
 
 class SynapseFunction(NodeFunction):
