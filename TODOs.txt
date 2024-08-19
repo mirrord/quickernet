@@ -1,3 +1,6 @@
 
  - experiment with node functions, record results
  - implement node, optimized_node functions
+ - implement model saving & loading
+ - expand datasets
+ - implement Adam, dropout, diffusion

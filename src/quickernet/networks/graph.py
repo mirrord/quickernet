@@ -22,13 +22,13 @@ class DirectedGraphModel(OptimizableFunction):
 
     def add_node(self, node: PipelineNode, is_input=False, is_output=False):
         node_idx = len(self._graph)
-        self._graph.add_node(node_idx, inner=node)
+        self._graph.add_node(node_idx, inner=node, input={}, output={})
         if is_input:
             self._input_nodes.append(node_idx)
         if is_output:
             self._output_nodes.append(node_idx)
 
-    def add_edge(self, source: int, target: int, input_site=None, output_site=None):
+    def add_edge(self, source: int, target: int, target_site=None, output_site=None):
         self._graph.add_edge(source, target)
         try:
             a = nx.topological_sort(self._graph)
@@ -38,9 +38,12 @@ class DirectedGraphModel(OptimizableFunction):
             raise NetworkException(
                 "Cycle detected in graph. Cannot add edge.")
         output_site = output_site if output_site is not None else 0
-        input_site = input_site if input_site is not None else 0
-        self._site_adj[source] = (output_site, input_site)
+        target_site = target_site if target_site is not None else 0
+        if source not in self._site_adj:
+            self._site_adj[source] = []
+        self._site_adj[source].append((output_site, target, target_site))
 
+    #TODO: with sites
     def assign_io_nodes(self, input_nodes: list, output_nodes: list):
         self._input_nodes = input_nodes
         self._output_nodes = output_nodes
@@ -48,6 +51,7 @@ class DirectedGraphModel(OptimizableFunction):
     def remove_node(self, node: int):
         self._graph.remove_node(node)
 
+    # TODO: update for sites
     def remove_edge(self, source: int, target: int):
         self._graph.remove_edge(source, target)
 
@@ -68,36 +72,48 @@ class DirectedGraphModel(OptimizableFunction):
     def _find_output_nodes(self):
         return [next(reversed(list(nx.topological_sort(self._graph))))]
 
-    def discover_input_and_output_nodes(self):
-        self._input_nodes = self._find_input_nodes()
-        self._output_nodes = self._find_output_nodes()
+    # finds the inputs that should be fed to a node at node_idx
+    def _get_feed(self, node_idx):
+        #TODO: store last output of each node in graph, not node!
+        #DO NOT access node.last_output, instead access graph.nodes[node_idx]['output'][0]
+        input_addrs = [(p, *self._site_adj.get(p, (0, node_idx, 0))) for p in self._graph.predecessors(node_idx)]
+        feed = {}
+        for source, outsite, _, target_insite in input_addrs:
+            if target_insite not in feed:
+                feed[target_insite] = []
+            feed[target_insite].append(self._graph.nodes[source]['output'][outsite])
+        return feed
+    
+    def _run_node(self, node_idx, inputs=None):
+        feed = inputs or self._get_feed(node_idx)
+        try:
+            self._graph.nodes[node_idx]['output'] = self._graph.nodes[node_idx]['inner'].forward(feed)
+        except ValueError:
+            staged_shape = feed.shape if isinstance(
+                feed, np.ndarray) else [n.shape for n in feed]
+            raise NetworkException(f"Axis mismatch on forward node {node_idx} (input from nodes: {list(self._graph.predecessors(node_idx))}) which expects {
+                                    self._graph.nodes[node_idx]['inner'].input_shape} but got {staged_shape} instead.")
+        except AttributeError as e:
+            raise NetworkException(
+                f"Node {node_idx} has no input, or input is of incorrect form: {e}")
 
-    def forward(self, inputs):
-        self._output_nodes = self._output_nodes or self._find_output_nodes()
+    def discover_input_and_output_nodes(self):
         self._input_nodes = self._input_nodes or self._find_input_nodes()
+        self._output_nodes = self._output_nodes or self._find_output_nodes()
         if not self._input_nodes:
             raise NetworkException("No input nodes found in graph.")
         if not self._output_nodes:
             raise NetworkException("No output nodes found in graph.")
+
+    def forward(self, inputs):
+        self.discover_input_and_output_nodes()
         inputs = self._standardize_input(inputs)
         for n in nx.topological_sort(self._graph):
-            staged_input = [
-                self._graph.nodes[p]['inner'].last_output for p in self._graph.predecessors(n)] or inputs.get(n, [])
-            staged_input = staged_input if len(
-                staged_input) > 1 else staged_input[0]
-            try:
-                self._graph.nodes[n]['inner'].forward(staged_input)
-            except ValueError:
-                staged_shape = staged_input.shape if isinstance(
-                    staged_input, np.ndarray) else [n.shape for n in staged_input]
-                raise NetworkException(f"Axis mismatch on forward node {n} (input from nodes: {list(self._graph.predecessors(n))}) which expects {
-                                       self._graph.nodes[n]['inner'].input_shape} but got {staged_shape} instead.")
-            except AttributeError as e:
-                raise NetworkException(
-                    f"Node {n} has no input, or input is of incorrect form: {e}")
-        self._output_nodes = self._output_nodes or []
+            inputs = inputs.get(n, None)
+            self._run_node(n, inputs)
+            
         self.last_outputs = {
-            n: self._graph.nodes[n]['inner'].last_output for n in self._output_nodes}
+            n: self._graph.nodes[n]["output"] for n in self._output_nodes}
         return self.last_outputs if len(self.last_outputs) > 1 else self.last_outputs[self._output_nodes[0]]
 
     def backward(self, error_gradients):
@@ -133,8 +149,7 @@ class DirectedGraphModel(OptimizableFunction):
     # TODO: track input & output sites
     # TODO: handle multiple inputs to nodes
     def optimize(self, rep_idx: int = 0, prefix="__model", freeze_inits=False, freeze_params=False) -> Tuple[dict, dict]:
-        self._output_nodes = self._output_nodes or self._find_output_nodes()
-        self._input_nodes = self._input_nodes or self._find_input_nodes()
+        self.discover_input_and_output_nodes()
         my_prefix = f"{prefix}{rep_idx}_node"
         first_input_name = f"self.{prefix}{rep_idx}_first_in"
 

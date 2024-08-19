@@ -1,0 +1,11 @@
+what other kinds of (cheap) nonlinear functions exist?
+
+imagine a hierarchy of concepts, each abstraction pulling from the levels below it (and to a lesser extent, other places as well)
+data starts "raw" from the sensors, and systematically processed by several rounds of clustering, anomaly detection, convolution,
+self-association, and retro-association to produce each progressive level of abstractions - first into basic features, then
+combinations of those features, and so on. At the lower end, we have lines, high contrast, or other simple ideas little more
+than patterns in the sensory data, while at the higher end we have "family," and "self," and "organization." 
+I hypothesize that our emotions are our brain's current most abstract heuristic estimation of the models above these concepts and
+the brain's experimentation of how each of the highest concepts (in turn, moving down the hierarchy) can assist in predicting
+proceeding input. Each emotion is really an estimation of how related each collection of related "concept webs" will be most
+promissing for including in current predictions.
