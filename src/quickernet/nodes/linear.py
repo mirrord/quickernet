@@ -1,11 +1,13 @@
+from typing import List, Tuple
+from cupy import ndarray
 import cupy as np
-from .node import NodeFunction
+from .node import PipelineFunction
 from .utils import list_except
 
 
-class Linear(NodeFunction):
+class Linear(PipelineFunction):
     # TODO: implement other initialization methods (Xavier, He, etc.)
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim: int, output_dim: int):
         # self.weight = np.random.randn(input_dim, output_dim)
         self.bias = np.random.randn(1, output_dim)
         # Xavier initialization
@@ -13,35 +15,40 @@ class Linear(NodeFunction):
             1 / (input_dim + output_dim)
         )
         # NOTE: are these even needed?
-        self.input_shape = ('BATCH_N', input_dim)
+        self.input_shape = ("BATCH_N", input_dim)
         # self.output_shape = ('BATCH_N', output_dim)
 
-    def forward(self, inputs):
+    def forward(self, inputs: ndarray) -> ndarray:
         return np.dot(inputs, self.weight) + self.bias
 
     def __str__(self):
         return f"<{self.__class__.__name__}: ({self.weight.shape}, {self.bias.shape})>"
 
-    def backward(self, error_gradient, last_recorded_input):
+    def backward(
+        self, error_gradient: ndarray, last_recorded_input: ndarray
+    ) -> Tuple[dict, ndarray]:
         bias_gradient = error_gradient
         weight_gradient = np.dot(last_recorded_input.T, bias_gradient)
-        return (bias_gradient, weight_gradient), np.dot(bias_gradient, self.weight.T)
+        return [bias_gradient, weight_gradient], np.dot(bias_gradient, self.weight.T)
 
-    def update(self, updates, learning_rate):
+    def update(self, updates: list, learning_rate: float):
         learning_factor = learning_rate / updates[0].shape[0]
-        self.bias -= (np.sum(updates[0], 0) * learning_factor)
-        self.weight -= (updates[1] * learning_factor)
+        self.bias -= np.sum(updates[0], 0) * learning_factor
+        self.weight -= updates[1] * learning_factor
 
 
 # NOTE: this function requires multiple inputs, i.e. inputs must be a list.
 # As a result, it won't work with the current implementation of PipelineNode.
 # Should unary and n-ary functions be treated differently?
-class SelfLinear(NodeFunction):
-    def forward(self, inputs):
+class SelfLinear(PipelineFunction):
+    def forward(self, inputs: List[ndarray]) -> ndarray:
         return np.matmul(*inputs)
 
     def backward(self, error_gradient, last_recorded_input):
-        return None, [np.matmul(*list_except(last_recorded_input, idx)) * error_gradient for idx, _ in enumerate(last_recorded_input)]
+        return None, [
+            np.matmul(*list_except(last_recorded_input, idx)) * error_gradient
+            for idx, _ in enumerate(last_recorded_input)
+        ]
 
     def update(self, updates, learning_rate):
         pass

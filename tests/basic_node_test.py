@@ -1,144 +1,84 @@
-# import cupy as np
-from quickernet.nodes.synapses import SynapseSum
+import cupy as np
 from quickernet.nodes.linear import Linear
 from quickernet.nodes.activations import Sigmoid
-from quickernet.nodes.node import PipelineNode
+from quickernet.nodes.pipeline import PipelineNode
+from tests.utils import classic_net_predict, classic_single_node_backprop
 
 
-def test_linear_optimize():
+def test_linear():
+    input_dim = 5
+    output_dim = 3
+    lin = Linear(input_dim, output_dim)
+    test_input = np.array([1, 2, 3, 4, 5], ndmin=2)
+    forward_output = lin.forward(test_input)
+    classic_output = np.dot(test_input, lin.weight) + lin.bias
+    assert np.allclose(forward_output, classic_output)
+    assert forward_output.shape == (1, output_dim)
+
+    test_grad = np.array([1, 2, 3], ndmin=2)
+    updates, gradient = lin.backward(test_grad, test_input)
+    classic_gradient = np.dot(test_grad, lin.weight.T)
+    classic_weight_gradient = np.dot(test_input.T, test_grad)
+    assert np.allclose(gradient, classic_gradient)
+
+    classic_update = (test_grad, classic_weight_gradient)
+    assert np.allclose(updates[0], classic_update[0])
+    assert np.allclose(updates[1], classic_update[1])
+
+    classic_updated_weight = lin.weight - 0.1 * classic_weight_gradient
+    classic_updated_bias = lin.bias - 0.1 * test_grad
+    lin.update(updates, 0.1)
+    assert np.allclose(lin.weight, classic_updated_weight)
+    assert np.allclose(lin.bias, classic_updated_bias)
+
+
+def test_pipeline_trivial():
     # test the linear node
     input_dim = 5
     output_dim = 3
+    num_samples = 4
     lin = Linear(input_dim, output_dim)
-    code = lin.optimize({})
-    target = {
-        "__imports__": [],
-        "__init__": {
-            "args": ["__node0_INPUT_DIM", "__node0_OUTPUT_DIM"],
-            "body": ["self.__node0_bias = np.random.randn(1, __node0_OUTPUT_DIM)",
-                     "self.__node0_weight = np.random.randn(__node0_INPUT_DIM, __node0_OUTPUT_DIM) * np.sqrt( 1 / (__node0_INPUT_DIM + __node0_OUTPUT_DIM) )",
-                     "self.__node0_input_shape = ('BATCH_N', __node0_INPUT_DIM)"],
-            "return": [],
-        },
-        "forward": {
-            "args": ["inputs"],
-            "body": [],
-            "return": ["np.dot(inputs, self.__node0_weight) + self.__node0_bias"],
-        },
-        "backward": {
-            "args": ["error_gradient", "last_recorded_input"],
-            "body": ["bias_gradient = error_gradient", "weight_gradient = np.dot(last_recorded_input.T, bias_gradient)"],
-            "return": ["(bias_gradient, weight_gradient)", "np.dot(bias_gradient, self.__node0_weight.T)"],
-        },
-    }
-    assert code["__init__"] == target["__init__"]
-    assert code["forward"] == target["forward"]
-    assert code["backward"] == target["backward"]
+    pipenode = PipelineNode([lin])
+    x = np.random.randn(num_samples, input_dim)
+    x_d = {0: [x]}
+    dgn_output = pipenode.forward(x_d)[0]
+    assert dgn_output.shape == (num_samples, output_dim)
+    classic_out = np.dot(x, lin.weight) + lin.bias
+    assert np.allclose(dgn_output, classic_out)
+
+    # test the backpropagation
+    expected_out = np.random.randn(num_samples, output_dim)
+    error_gradient = dgn_output - expected_out
+    classic_gradient = np.dot(error_gradient, lin.weight.T)
+    dgn_node_updates, dgn_gradient = pipenode.backward({0: error_gradient}, x_d)
+    dgn_gradient = dgn_gradient[0]
+    dgn_node_updates = dgn_node_updates[0]
+    classic_node_updates = (error_gradient, np.dot(x.T, error_gradient))
+    assert np.allclose(dgn_gradient, classic_gradient)
+    assert np.allclose(dgn_node_updates[0], classic_node_updates[0])
+    assert np.allclose(dgn_node_updates[1], classic_node_updates[1])
 
 
-def test_sigmoid_optimize():
-    # test activation function
-    sig = Sigmoid()
-    code = sig.optimize({})
-    target = {
-        "__imports__": [],
-        "__init__": {},
-        "forward": {
-            "args": ["inputs"],
-            "body": [],
-            "return": ["1 / (1 + np.exp(-inputs))"],
-        },
-        "backward": {
-            "args": ["error_gradient", "last_recorded_input"],
-            "body": ["forward_output = 1 / (1 + np.exp(-last_recorded_input))"],
-            "return": ["None", "error_gradient * forward_output * (1 - forward_output)"],
-        },
-    }
-    assert code["forward"] == target["forward"]
-    assert code["backward"] == target["backward"]
-
-
-def test_synapse_optimize():
-    syn = SynapseSum()
-    code = syn.optimize({})
-    target = {
-        "forward": {
-            "args": ["inputs"],
-            "body": [],
-            "return": ["inputs"],
-        },
-        "backward": {
-            "args": ["error_gradient", "last_recorded_input"],
-            "body": [],
-            "return": ["None", "error_gradient"],
-        },
-    }
-    assert code["forward"] == target["forward"]
-    assert code["backward"] == target["backward"]
-
-    syn([1, 2, 3])
-    code = syn.optimize({})
-    target = {
-        "forward": {
-            "args": ["inputs"],
-            "body": [],
-            "return": ["sum(inputs)"],
-        },
-        "backward": {
-            "args": ["error_gradient", "last_recorded_input"],
-            "body": [],
-            "return": ["None", "error_gradient"],
-        },
-    }
-    assert code["forward"] == target["forward"]
-    assert code["backward"] == target["backward"]
-
-
-def test_pipeline_optimize():
+def test_pipeline_simple():
+    # test the linear node
     input_dim = 5
     output_dim = 3
-    syn = SynapseSum()
+    num_samples = 4
     lin = Linear(input_dim, output_dim)
-    lin2 = Linear(input_dim, output_dim)
-    pipenode = PipelineNode([syn, lin, lin2, Sigmoid()])
-    code = pipenode.optimize({})
-    target = {
-        "__imports__": [],
-        "__init__": {
-            "args": ["__node0_step1_INPUT_DIM", "__node0_step1_OUTPUT_DIM", "__node0_step2_INPUT_DIM", "__node0_step2_OUTPUT_DIM"],
-            "body": ["self.__node0_step1_bias = np.random.randn(1, __node0_step1_OUTPUT_DIM)",
-                     "self.__node0_step1_weight = np.random.randn(__node0_step1_INPUT_DIM, __node0_step1_OUTPUT_DIM) * np.sqrt( 1 / (__node0_step1_INPUT_DIM + __node0_step1_OUTPUT_DIM) )",
-                     "self.__node0_step1_input_shape = ('BATCH_N', __node0_step1_INPUT_DIM)",
-
-                     "self.__node0_step2_bias = np.random.randn(1, __node0_step2_OUTPUT_DIM)",
-                     "self.__node0_step2_weight = np.random.randn(__node0_step2_INPUT_DIM, __node0_step2_OUTPUT_DIM) * np.sqrt( 1 / (__node0_step2_INPUT_DIM + __node0_step2_OUTPUT_DIM) )",
-                     "self.__node0_step2_input_shape = ('BATCH_N', __node0_step2_INPUT_DIM)"],
-            "return": [],
-        },
-        "forward": {
-            "args": ["inputs"],
-            "body": ["self.__node0_step0_out0 = inputs",
-                     "self.__node0_step1_out0 = np.dot(self.__node0_step0_out0, self.__node0_step1_weight) + self.__node0_step1_bias",
-                     "self.__node0_step2_out0 = np.dot(self.__node0_step1_out0, self.__node0_step2_weight) + self.__node0_step2_bias"],
-            "return": ["1 / (1 + np.exp(-self.__node0_step2_out0))"],
-        },
-        "backward": {
-            "args": ["error_gradient"],
-            "body": ["forward_output = 1 / (1 + np.exp(-self.__node0_step2_out0))",
-                     "__node0_step3_gradient = error_gradient * forward_output * (1 - forward_output)",
-
-                     "bias_gradient = __node0_step3_gradient",
-                     "weight_gradient = np.dot(self.__node0_step1_out0.T, bias_gradient)",
-                     "__node0_step2_update = (bias_gradient, weight_gradient)",
-                     "__node0_step2_gradient = np.dot(bias_gradient, self.__node0_step2_weight.T)",
-
-                     "bias_gradient = __node0_step2_gradient",
-                     "weight_gradient = np.dot(self.__node0_step0_out0.T, bias_gradient)",
-                     "__node0_step1_update = (bias_gradient, weight_gradient)",
-                     "__node0_step1_gradient = np.dot(bias_gradient, self.__node0_step1_weight.T)"],
-            "return": ["None", "__node0_step1_gradient"],
-        },
-    }
-    assert code["__init__"] == target["__init__"]
-    assert code["forward"] == target["forward"]
-    assert code["backward"] == target["backward"]
+    sig = Sigmoid()
+    pipenode = PipelineNode([lin, sig])
+    x = np.random.randn(num_samples, input_dim)
+    x_d = {0: [x]}
+    dgn_output = pipenode.forward(x_d)[0]
+    assert dgn_output.shape == (num_samples, output_dim)
+    classic_out = classic_net_predict([lin.weight], [lin.bias], x.copy())
+    assert np.allclose(dgn_output, classic_out)
+    test_grad = np.random.randn(num_samples, output_dim)
+    updates, gradient = pipenode.backward({0: test_grad}, x_d)
+    gradient = gradient[0]
+    classic_updates, classic_gradient = classic_single_node_backprop(
+        lin.weight, lin.bias, x.copy(), test_grad
+    )
+    assert np.allclose(gradient, classic_gradient)
+    assert np.allclose(updates[0][0], classic_updates[0])
+    assert np.allclose(updates[0][1], classic_updates[1])

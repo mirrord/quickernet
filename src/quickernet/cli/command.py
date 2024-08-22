@@ -12,12 +12,12 @@ def split_docstring(docstring):
         return {}
     docs = {}
     keep_going = False
-    for line in docstring.split('\n'):
+    for line in docstring.split("\n"):
         sline = line.strip()
         if not sline:
             keep_going = False
-        elif sline.startswith('@'):
-            key, value = sline[1:].split(':', 1)
+        elif sline.startswith("@"):
+            key, value = sline[1:].split(":", 1)
             docs[key.strip()] = value.strip()
             keep_going = True
         elif keep_going:
@@ -27,22 +27,33 @@ def split_docstring(docstring):
 
 def command(subs, parent_parser):
     def decorator(function):
-        cmd = function.__name__.replace('_', '-')
+        cmd = function.__name__.replace("_", "-")
         # print(f"adding command: {cmd}")
         command_docstring = function.__doc__ or ""
-        command_docstring = command_docstring.split('\n')[0]
+        command_docstring = command_docstring.split("\n")[0]
+        # Note: to make usage correct, I have to remove the parents and add_help arguments.
+        # but to make commands function, they have to have the parents and add_help arguments.
+        # TODO: figure out how to make this work
         subparser = subs.add_parser(
-            cmd, help=command_docstring)
+            cmd, help=command_docstring, parents=[parent_parser], add_help=False
+        )
         docstrings = split_docstring(function.__doc__)
         for varname, vartype in function.__annotations__.items():
-            defaults = {} if function.__kwdefaults__ is None else function.__kwdefaults__.items()
+            defaults = (
+                {}
+                if function.__kwdefaults__ is None
+                else function.__kwdefaults__.items()
+            )
             docstring = docstrings.get(varname, str(vartype))
             if varname in defaults:
                 subparser.add_argument(
-                    f'--{varname}', type=vartype, default=function.__kwdefaults__['varname'], help=docstring)
+                    f"--{varname}",
+                    type=vartype,
+                    default=function.__kwdefaults__["varname"],
+                    help=docstring,
+                )
             else:
-                subparser.add_argument(
-                    f'--{varname}', type=vartype, help=docstring)
+                subparser.add_argument(f"--{varname}", type=vartype, help=docstring)
 
         @wraps(function)
         def wrapper(args: argparse.Namespace):
@@ -52,7 +63,9 @@ def command(subs, parent_parser):
                 params[param_name] = args.__dict__.get(param_name, None)
                 if params[param_name] is None:
                     if param.default == inspect.Parameter.empty:
-                        raise CLIError(f"missing required argument: {param_name} of type {param.annotation.__name__}")
+                        raise CLIError(
+                            f"missing required argument: {param_name} of type {param.annotation.__name__}"
+                        )
                     else:
                         params[param_name] = param.default
             result = function(**params)

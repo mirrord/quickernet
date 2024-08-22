@@ -132,7 +132,6 @@ def glue_backwards(fd1: dict, fd2: dict, variable_replacements: dict, rep_idx=0,
     # glue bodies together by stitching outputs from one to inputs of the other
     body = fd2.get("body", [])
     output_update, output_gradient = fd2.get("return", ("None", param))
-    # TODO: collate updates & return aggregate
     does_update = output_update != "None"
     if does_update:
         out_name = f"{prefix}{rep_idx}_update"
